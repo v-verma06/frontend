@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image Grid Tool – Upload • Grid • Export</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #101a2f;
+      --text: #eaf0ff;
+      --muted: #9bb0d3;
+      --accent: #4f7cff;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --border: #24314e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text); background: radial-gradient(1200px 600px at 20% 0%, #0f1b34, #0b1220);
+      min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto;
+    }
+    header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; backdrop-filter: blur(8px); background: color-mix(in srgb, var(--bg) 80%, transparent);
+      display: flex; gap: 16px; align-items: center; justify-content: space-between;
+    }
+    header h1 { font-size: clamp(18px, 2.4vw, 22px); margin: 0; font-weight: 700; letter-spacing: .3px; }
+    .container { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px; }
+    @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+    .panel h2 { font-size: 14px; text-transform: uppercase; color: var(--muted); letter-spacing: .12em; margin: 0 0 12px; }
+
+    .controls { display: grid; gap: 12px; }
+    .row { display: grid; grid-template-columns: 120px 1fr auto; gap: 10px; align-items: center; }
+    .row.single { grid-template-columns: 1fr; }
+    label { color: var(--muted); font-size: 13px; }
+    input[type="number"], input[type="range"], input[type="color"], select {
+      width: 100%; background: #0e162a; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+    }
+    input[type="range"] { padding: 0; height: 32px; }
+    input[type="checkbox"] { transform: scale(1.1); }
+
+    .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    button, .btn {
+      appearance: none; border: 1px solid var(--border); background: #112043; color: var(--text); padding: 10px 12px; border-radius: 12px; cursor: pointer; font-weight: 600;
+    }
+    button.primary { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 70%, #000); }
+    button.success { background: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 70%, #000); }
+    button.ghost { background: transparent; }
+    button.danger { background: var(--danger); border-color: color-mix(in srgb, var(--danger) 70%, #000); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+
+    .stage { display: grid; place-items: center; background: #0a1326; border: 1px dashed var(--border); border-radius: 16px; min-height: 60vh; position: relative; overflow: hidden; }
+    canvas { max-width: 100%; height: auto; border-radius: 12px; background: #0a0f1c; }
+
+    .dropzone { border: 2px dashed #3a4b75; padding: 18px; text-align: center; border-radius: 12px; color: var(--muted); }
+    .dropzone.drag { border-color: var(--accent); color: var(--text); }
+
+    footer { color: var(--muted); font-size: 12px; padding: 8px 16px; border-top: 1px solid var(--border); text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🖼️ Image Grid Tool</h1>
+    <div class="btns">
+      <label class="btn ghost" for="file">Import Image</label>
+      <input id="file" type="file" accept="image/*" hidden />
+      <button id="exportPng" class="success" disabled>Export PNG</button>
+      <button id="exportJpg" class="success" disabled>Export JPG</button>
+      <button id="clear" class="danger" disabled>Clear</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <aside class="panel">
+      <h2>Controls</h2>
+      <div class="controls">
+        <div class="btns">
+          <button data-preset="2" class="ghost">2×2</button>
+          <button data-preset="4" class="ghost">4×4</button>
+          <button data-preset="8" class="ghost">8×8</button>
+          <button data-preset="12" class="ghost">12×12</button>
+        </div>
+
+        <div class="row">
+          <label for="rows">Rows</label>
+          <input id="rows" type="range" min="1" max="32" value="4" />
+          <input id="rowsNum" type="number" min="1" max="64" value="4" />
+        </div>
+        <div class="row">
+          <label for="cols">Columns</label>
+          <input id="cols" type="range" min="1" max="32" value="4" />
+          <input id="colsNum" type="number" min="1" max="64" value="4" />
+        </div>
+
+        <div class="row">
+          <label for="lock">Lock rows = cols</label>
+          <input id="lock" type="checkbox" checked />
+          <span></span>
+        </div>
+
+        <div class="row">
+          <label for="lineWidth">Line Width</label>
+          <input id="lineWidth" type="range" min="1" max="10" value="1" />
+          <input id="lineWidthNum" type="number" min="1" max="20" value="1" />
+        </div>
+
+        <div class="row">
+          <label for="color">Line Color</label>
+          <input id="color" type="color" value="#ff3d3d" />
+          <select id="dash">
+            <option value="solid" selected>Solid</option>
+            <option value="dashed">Dashed</option>
+            <option value="dotted">Dotted</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="opacity">Line Opacity</label>
+          <input id="opacity" type="range" min="0" max="1" step="0.05" value="1" />
+          <input id="opacityNum" type="number" min="0" max="1" step="0.05" value="1" />
+        </div>
+
+        <div class="row">
+          <label for="cellIndex">Show Cell Index</label>
+          <input id="cellIndex" type="checkbox" />
+          <span></span>
+        </div>
+
+        <div class="dropzone" id="dropzone">Drop image here or use “Import Image”</div>
+      </div>
+    </aside>
+
+    <section class="panel stage">
+      <canvas id="canvas" width="0" height="0" aria-label="preview"></canvas>
+    </section>
+  </div>
+
+  <footer>Built with HTML5 Canvas – works offline, no server required.</footer>
+
+  <script>
+    // --- State ---
+    const state = {
+      img: null,
+      imgW: 0,
+      imgH: 0,
+      rows: 4,
+      cols: 4,
+      lineWidth: 1,
+      color: '#ff3d3d',
+      dash: 'solid',
+      opacity: 1,
+      lock: true,
+      showIndex: false,
+    };
+
+    // --- Elements ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const fileInput = document.getElementById('file');
+    const exportPngBtn = document.getElementById('exportPng');
+    const exportJpgBtn = document.getElementById('exportJpg');
+    const clearBtn = document.getElementById('clear');
+
+    const rows = document.getElementById('rows');
+    const rowsNum = document.getElementById('rowsNum');
+    const cols = document.getElementById('cols');
+    const colsNum = document.getElementById('colsNum');
+    const lock = document.getElementById('lock');
+    const lineWidth = document.getElementById('lineWidth');
+    const lineWidthNum = document.getElementById('lineWidthNum');
+    const color = document.getElementById('color');
+    const dash = document.getElementById('dash');
+    const opacity = document.getElementById('opacity');
+    const opacityNum = document.getElementById('opacityNum');
+    const cellIndex = document.getElementById('cellIndex');
+    const dropzone = document.getElementById('dropzone');
+
+    // --- Helpers ---
+    function fitCanvasToStage() {
+      if (!state.img) return;
+      const stage = document.querySelector('.stage');
+      const padding = 24; // inner padding visual
+      const maxW = stage.clientWidth - padding;
+      const maxH = Math.max(320, stage.clientHeight - padding);
+
+      const r = Math.min(maxW / state.imgW, maxH / state.imgH);
+      canvas.width = Math.floor(state.imgW * r);
+      canvas.height = Math.floor(state.imgH * r);
+    }
+
+    function applyStroke(ctx2d) {
+      const lw = Number(state.lineWidth);
+      ctx2d.lineWidth = lw;
+      ctx2d.strokeStyle = hexToRgba(state.color, Number(state.opacity));
+      if (state.dash === 'solid') ctx2d.setLineDash([]);
+      if (state.dash === 'dashed') ctx2d.setLineDash([8, 8]);
+      if (state.dash === 'dotted') ctx2d.setLineDash([2, 6]);
+    }
+
+    function hexToRgba(hex, a = 1) {
+      const v = hex.replace('#', '');
+      const bigint = parseInt(v, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+
+    function draw() {
+      if (!state.img) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+      fitCanvasToStage();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(state.img, 0, 0, canvas.width, canvas.height);
+
+      const stepX = canvas.width / state.cols;
+      const stepY = canvas.height / state.rows;
+      applyStroke(ctx);
+
+      // Vertical lines
+      for (let x = 1; x < state.cols; x++) {
+        const xx = Math.round(x * stepX) + 0.5; // crisp lines
+        ctx.beginPath();
+        ctx.moveTo(xx, 0);
+        ctx.lineTo(xx, canvas.height);
+        ctx.stroke();
+      }
+      // Horizontal lines
+      for (let y = 1; y < state.rows; y++) {
+        const yy = Math.round(y * stepY) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, yy);
+        ctx.lineTo(canvas.width, yy);
+        ctx.stroke();
+      }
+
+      if (state.showIndex) {
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(0,0,0,.45)';
+        ctx.font = `${Math.max(10, Math.floor(Math.min(stepX, stepY) * 0.22))}px ui-sans-serif, system-ui`;
+        ctx.textBaseline = 'top';
+        let k = 1;
+        for (let r = 0; r < state.rows; r++) {
+          for (let c = 0; c < state.cols; c++) {
+            const px = c * stepX + 6;
+            const py = r * stepY + 6;
+            ctx.fillRect(px - 4, py - 2, ctx.measureText(String(k)).width + 8, parseInt(ctx.font) + 6);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(String(k), px, py);
+            ctx.fillStyle = 'rgba(0,0,0,.45)';
+            k++;
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    function exportImage(type = 'image/png') {
+      if (!state.img) return;
+      // Export at original image resolution for best quality
+      const off = document.createElement('canvas');
+      off.width = state.imgW;
+      off.height = state.imgH;
+      const octx = off.getContext('2d');
+      octx.drawImage(state.img, 0, 0, off.width, off.height);
+
+      // Draw grid in full resolution
+      const stepX = off.width / state.cols;
+      const stepY = off.height / state.rows;
+      applyStroke(octx);
+
+      for (let x = 1; x < state.cols; x++) {
+        const xx = Math.round(x * stepX) + 0.5;
+        octx.beginPath();
+        octx.moveTo(xx, 0);
+        octx.lineTo(xx, off.height);
+        octx.stroke();
+      }
+      for (let y = 1; y < state.rows; y++) {
+        const yy = Math.round(y * stepY) + 0.5;
+        octx.beginPath();
+        octx.moveTo(0, yy);
+        octx.lineTo(off.width, yy);
+        octx.stroke();
+      }
+
+      if (state.showIndex) {
+        octx.save();
+        octx.setLineDash([]);
+        const cellFont = Math.max(12, Math.floor(Math.min(stepX, stepY) * 0.22));
+        octx.font = `${cellFont}px ui-sans-serif, system-ui`;
+        octx.textBaseline = 'top';
+        octx.fillStyle = 'rgba(0,0,0,.45)';
+        let k = 1;
+        for (let r = 0; r < state.rows; r++) {
+          for (let c = 0; c < state.cols; c++) {
+            const px = c * stepX + 8;
+            const py = r * stepY + 8;
+            const w = octx.measureText(String(k)).width + 10;
+            const h = cellFont + 8;
+            octx.fillRect(px - 4, py - 2, w, h);
+            octx.fillStyle = '#fff';
+            octx.fillText(String(k), px, py);
+            octx.fillStyle = 'rgba(0,0,0,.45)';
+            k++;
+          }
+        }
+        octx.restore();
+      }
+
+      const dataURL = off.toDataURL(type, type === 'image/jpeg' ? 0.92 : undefined);
+      const a = document.createElement('a');
+      const ext = type === 'image/png' ? 'png' : 'jpg';
+      a.download = `gridded-${state.rows}x${state.cols}.${ext}`;
+      a.href = dataURL; a.click();
+    }
+
+    // --- Events ---
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        state.img = img; state.imgW = img.naturalWidth; state.imgH = img.naturalHeight;
+        exportPngBtn.disabled = exportJpgBtn.disabled = clearBtn.disabled = false;
+        draw();
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    });
+
+    // Drag & Drop
+    ;['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); }));
+    ;['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
+    dropzone.addEventListener('drop', (e)=>{
+      const file = e.dataTransfer.files?.[0];
+      if (file) { fileInput.files = e.dataTransfer.files; fileInput.dispatchEvent(new Event('change')); }
+    });
+
+    // Presets
+    document.querySelectorAll('[data-preset]').forEach(btn => btn.addEventListener('click', ()=>{
+      const v = Number(btn.dataset.preset);
+      rows.value = cols.value = rowsNum.value = colsNum.value = v;
+      state.rows = state.cols = v; draw();
+    }));
+
+    // Sync helpers
+    function syncRows(val){
+      state.rows = val; rows.value = rowsNum.value = val;
+      if (state.lock) { state.cols = val; cols.value = colsNum.value = val; }
+      draw();
+    }
+    function syncCols(val){
+      state.cols = val; cols.value = colsNum.value = val;
+      if (state.lock) { state.rows = val; rows.value = rowsNum.value = val; }
+      draw();
+    }
+
+    rows.addEventListener('input', e=> syncRows(Number(e.target.value)));
+    rowsNum.addEventListener('input', e=> syncRows(Number(e.target.value)));
+    cols.addEventListener('input', e=> syncCols(Number(e.target.value)));
+    colsNum.addEventListener('input', e=> syncCols(Number(e.target.value)));
+
+    lock.addEventListener('change', e=> { state.lock = e.target.checked; });
+
+    function syncLineWidth(v){ state.lineWidth = v; lineWidth.value = lineWidthNum.value = v; draw(); }
+    lineWidth.addEventListener('input', e=> syncLineWidth(Number(e.target.value)));
+    lineWidthNum.addEventListener('input', e=> syncLineWidth(Number(e.target.value)));
+
+    color.addEventListener('input', e=> { state.color = e.target.value; draw(); });
+    dash.addEventListener('change', e=> { state.dash = e.target.value; draw(); });
+
+    function syncOpacity(v){ state.opacity = v; opacity.value = opacityNum.value = v; draw(); }
+    opacity.addEventListener('input', e=> syncOpacity(Number(e.target.value)));
+    opacityNum.addEventListener('input', e=> syncOpacity(Number(e.target.value)));
+
+    cellIndex.addEventListener('change', e=> { state.showIndex = e.target.checked; draw(); });
+
+    exportPngBtn.addEventListener('click', ()=> exportImage('image/png'));
+    exportJpgBtn.addEventListener('click', ()=> exportImage('image/jpeg'));
+    clearBtn.addEventListener('click', ()=>{
+      state.img = null; ctx.clearRect(0,0,canvas.width,canvas.height);
+      exportPngBtn.disabled = exportJpgBtn.disabled = clearBtn.disabled = true;
+      fileInput.value = '';
+    });
+
+    window.addEventListener('resize', draw);
+  </script>
+</body>
+</html>
